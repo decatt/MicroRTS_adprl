@@ -23,7 +23,7 @@ vf_coef = 0.5
 max_grad_norm = 0.5
 cuda = True
 device = 'cuda'
-pae_length = 128
+pae_length = 256
 num_envs = 32
 num_steps = 512
 
