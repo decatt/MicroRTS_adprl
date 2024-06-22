@@ -38,25 +38,25 @@ ai_dict = {
 }
 
 parser = argparse.ArgumentParser(description='PPO')
-parser.add_argument('--map_name', type=str, default='basesWorkers16x16')
+parser.add_argument('--map_name', type=str, default='TwoBasesBarracks16x16')
 parser.add_argument('--op_ai', type=str, default='coacAI')
 args = parser.parse_args()
 
 op_ai = ai_dict[args.op_ai]
 
 class Agent:
-    def __init__(self,net:ActorCritic) -> None:
+    def __init__(self,net:ActorCritic,map_) -> None:
         self.net = net
         self.num_envs = num_envs
         self.num_steps = num_steps
         self.pae_length = pae_length
         self.action_space = action_space
-        self.out_comes = deque( maxlen=1000)
+        self.out_comes = deque( maxlen= 1000)
         self.env = MicroRTSVecEnv(
                 num_envs=self.num_envs,
                 max_steps=5000,
                 ai2s=[op_ai for _ in range(self.num_envs)],
-                map_path=map_path,
+                map_path=map_,
                 reward_weight=np.array([10.0, 1.0, 1.0, 0.2, 1.0, 4.0])
             )
         self.obs = self.env.reset()
@@ -293,11 +293,6 @@ if __name__ == "__main__":
         h=16
         w=16
         cnn_output_dim = 32*6*6
-    elif map_name == "basesWorkers16x16":
-        map_path = "maps/16x16/basesWorkers16x16.xml"
-        h=16
-        w=16
-        cnn_output_dim = 32*6*6
     action_space = [w*h, 6, 4, 4, 4, 4, 7, 49]
     observation_space = [w,h,27]
 
@@ -309,11 +304,12 @@ if __name__ == "__main__":
     random.seed(seed)
 
     net = ActorCritic(cnn_output_dim=cnn_output_dim,pos_output=action_space[0])
-    #net.load_state_dict(torch.load("saved_model\ppo_agent\ppo_basesWorkers16x16noResources.pt"))
+    net.load_state_dict(torch.load("saved_model\ppo_agent\ppo_basesWorkers16x16noResources.pt"))
     parameters = sum([np.prod(p.shape) for p in net.parameters()])
     print("parameters size is:",parameters)
 
-    agent = Agent(net)
+    agent = Agent(net, map_path)
+    check_agent = Agent(net, "maps/16x16/basesWorkers16x16NoResources.xml")
     calculator = Calculator(net)
 
     MAX_VERSION = 5000
@@ -337,13 +333,19 @@ if __name__ == "__main__":
         }
     )
     for _ in range(20):
-        agent.sample_env(check=True)
-        print("checking...")
+        _,check_infos = check_agent.sample_env(check=True)
+        check_mean_win_rates = check_infos["mean_win_rates"]
+        print("check_mean_win_rates:",check_mean_win_rates)
 
     for version in range(MAX_VERSION):
+        _,check_infos = check_agent.sample_env(check=True)
+        check_mean_win_rates = check_infos["mean_win_rates"]
+        print("check_mean_win_rates:",check_mean_win_rates)
+
         samples_list,infos = agent.sample_env(check=True)
 
         infos["global_steps"] = version*num_envs*pae_length
+        infos["check_mean_win_rates"] = check_mean_win_rates
         wandb.log(infos)
 
         print("version:",version,"reward:",infos["mean_rewards"])
@@ -359,8 +361,7 @@ if __name__ == "__main__":
             calculator.generate_grads()
         calculator.end_batch_train()
 
-        if (version+1) % 500 == 0:
-            torch.save(net.state_dict(), "saved_model/ppo_agent/"+comment+str(seed)+"_v_"+str(version)+".pt")
+    torch.save(net.state_dict(), "saved_model/ppo_agent/"+comment+str(seed)+".pt")
         
     wandb.finish()
 

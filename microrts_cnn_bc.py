@@ -27,10 +27,9 @@ vf_coef = 0.5
 max_grad_norm = 0.5
 cuda = True
 device = 'cuda'
-pae_length = 256
-sample_length = 512
-num_envs = 32
-num_steps = 256
+sample_length = 1024
+num_envs = 16
+num_steps = 512
 
 ai_dict = {
     "coacAI": microrts_ai.coacAI,
@@ -48,8 +47,10 @@ parser.add_argument('--weight', type=int, default=10000)
 parser.add_argument('--base_ai', type=str, default='coacAI')
 parser.add_argument('--op_ai', type=str, default='coacAI')
 
-op_ai = ai_dict[argparse.op_ai]
-base_ai = ai_dict[argparse.base_ai]
+args = parser.parse_args()
+
+op_ai = ai_dict[args.op_ai]
+base_ai = ai_dict[args.base_ai]
 
 #main network
 class Actor(nn.Module):
@@ -102,7 +103,7 @@ class Agent:
         for i in range(num_envs):
             gss += [self.env.envs.vec_client.clients[i].gs]
         base_dist, _ = self.base_ai.getSampleAction(0, gss, self.env.envs)
-        base_dist = base_dist*argparse.weight
+        base_dist = base_dist*args.weight
         states = torch.Tensor(states)
         distris = self.net.get_distris(states)
 
@@ -260,7 +261,7 @@ class BCCalculator:
             self.share_optim.step()
 
 if __name__ == "__main__":
-    map_name = argparse.map_name
+    map_name = args.map_name
     seed = random.randint(0,100000)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -294,12 +295,12 @@ if __name__ == "__main__":
     MAX_VERSION = 500
     REPEAT_TIMES = 10
 
-    wandb.init(project="MicrortsImitationLearning", name=comment, config={
-        "base_ai": argparse.base_ai,
-        "op_ai": argparse.op_ai,
+    wandb.init(project="Microrts_bc", name=comment, config={
+        "base_ai": args.base_ai,
+        "op_ai": args.op_ai,
         "map": map_name,
         "epochs": MAX_VERSION,
-        "samples_per_epochs":num_envs*pae_length,
+        "samples_per_epochs":num_envs*num_steps,
         "start_win_rate":0.0,
         "temperature_coefficient":-2,
         })
